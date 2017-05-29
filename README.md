@@ -1,1 +1,7 @@
-# epi_click
+# epi_click: Making trajectories of 
+
+## Run the Application
+
+```r
+shiny::runGitHub("muschellij2/epi_click")
+```
