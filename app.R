@@ -81,7 +81,7 @@ g = g +
   scale_color_manual(drop = FALSE, values = pal)
 g
 
-ui = fluidPage(titlePanel("Projection of HIV Incidence"),
+ui = fluidPage(titlePanel("Projection of Cholera Incidence"),
                useShinyjs(),
                sidebarLayout(
                  sidebarPanel(

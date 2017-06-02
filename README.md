@@ -3,5 +3,5 @@
 ## Run the Application
 
 ```r
-shiny::runGitHub("muschellij2/epi_click")
+shiny::runGitHub("muschellij2/epi_click", port = 1221)
 ```
