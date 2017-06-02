@@ -3,6 +3,25 @@ library(shinyjs)
 library(dplyr)
 library(ggplot2)
 library(RColorBrewer)
+library(googleAuthR)
+library(googleID)
+
+opts = list()
+force = TRUE
+
+glogin = FALSE
+if (file.exists("epi-click-auth.R")) {
+  opts = list(port = 1221)
+  
+  source("epi-click-auth.R")
+  options(googleAuthR.scopes.selected = 
+            c("https://www.googleapis.com/auth/userinfo.email",
+              "https://www.googleapis.com/auth/userinfo.profile"))
+  options("googleAuthR.webapp.client_id" = gclient_id)
+  options("googleAuthR.webapp.client_secret" = gsecret_id)
+  glogin = TRUE
+}
+
 
 N = 200
 levs = c(2010:2017, "projection")
@@ -64,21 +83,30 @@ g
 
 ui = fluidPage(titlePanel("Hey"),
                useShinyjs(),
-               sidebarLayout(sidebarPanel(
-                 p("Click the button to begin cropping the image")
-               ),
-               mainPanel(
-                 plotOutput("plot1",
-                            # brush = brushOpts(
-                            #   id = "plot1_brush",
-                            #   resetOnNew = TRUE
-                            # ),
-                            click = "plot1_click",
-                            dblclick = "plot1_dblclick")
-               )))
+               sidebarLayout(
+                 sidebarPanel(
+                   p("Welcome!"),
+                   if (glogin) {
+                     googleAuthUI("gauth_login")
+                   } else {
+                     NULL
+                   },
+                   downloadButton("saveProjection", "Save Projection")
+                 ),
+                 mainPanel(
+                   textOutput("display_username"),
+                   plotOutput(
+                     "plot1",
+                     click = "plot1_click",
+                     dblclick = "plot1_dblclick")
+                 )
+               )
+)
 
 
 server = function(input, output, session) {
+  shinyjs::disable("saveProjection")
+  
   v <- reactiveValues(
     imgclick.x = last_point$x,
     imgclick.y = last_point$y,
@@ -87,15 +115,58 @@ server = function(input, output, session) {
     dbl.x = NULL,
     dbl.y = NULL
   )
-  
+  rv = reactiveValues(
+    login = FALSE
+  )  
+  if (glogin) {
+    ## Authentication
+    accessToken <- callModule(googleAuth, "gauth_login",
+                              login_class = "btn btn-primary",
+                              logout_class = "btn btn-primary")
+    userDetails <- reactive({
+      validate(
+        need(accessToken(), 
+             "You are not logged in.  You must log in to save projections")
+      )
+      rv$login <- TRUE
+      with_shiny(get_user_info, shiny_access_token = accessToken())
+    })
+    
+    ## Display user's Google display name after successful login
+    output$display_username <- renderText({
+      validate(
+        need(userDetails(), "getting user details")
+      )
+      paste0("You are logged in as ", userDetails()$displayName)
+      # userDetails()$displayName
+    })
+    
+    ## Workaround to avoid shinyaps.io URL problems
+    observe({
+      if (rv$login) {
+        shinyjs::onclick(
+          "gauth_login-googleAuthUi",
+          shinyjs::runjs(
+            "window.location.href = 'https://yourdomain.shinyapps.io/appName';"))
+      }
+    })
+  }
   
   ### Keep track of click locations if tracing paw or tumor
   observeEvent(input$plot1_click, {
     # Keep track of number of clicks for line drawing
-    if (input$plot1_click$x > max_x_year) {
+    if (input$plot1_click$x > max_x_year & 
+        input$plot1_click$x <= xmax) {
       v$imgclick.x <- c(v$imgclick.x, input$plot1_click$x)
       v$imgclick.y <- c(v$imgclick.y, input$plot1_click$y)
     }
+    if (length(v$imgclick.x) <= 1) {
+      disable("saveProjection")
+    } else {
+      if (glogin || force){
+        enable("saveProjection")
+      }
+    } 
   })
   
   
@@ -112,12 +183,19 @@ server = function(input, output, session) {
     print(input$plot1_dblclick)
     rm.x = input$plot1_dblclick$x
     if (rm.x > max_x_year) {
-        
+      
       rm.y = input$plot1_dblclick$y
       dist = (v$imgclick.x - rm.x) ^ 2 + (v$imgclick.y - rm.y) ^ 2
       rm_point = which.min(dist)
       v$imgclick.x = v$imgclick.x[-rm_point]
       v$imgclick.y = v$imgclick.y[-rm_point]
+    }
+    if (length(v$imgclick.x) <= 1) {
+      disable("saveProjection")
+    } else {
+      if (glogin || force){
+        enable("saveProjection")
+      }
     }
   })
   
@@ -149,6 +227,20 @@ server = function(input, output, session) {
     gg
   })
   
+  output$saveProjection = downloadHandler(
+    filename = "projection.rda",
+    content = function(file) {
+      df = make_data()
+      udets = NULL
+      if (glogin) {
+        udets = userDetails()  
+      }
+      timestamp = timestamp()
+      save(df, timestamp, udets, file = file)
+    }
+  )
+  
 }
 
-shinyApp(ui = ui, server = server)
+print(opts)
+shinyApp(ui = ui, server = server, options = opts)
