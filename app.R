@@ -7,7 +7,7 @@ library(googleAuthR)
 library(googleID)
 
 opts = list()
-force = TRUE
+force = FALSE
 
 glogin = FALSE
 if (file.exists("epi-click-auth.R")) {
@@ -81,7 +81,7 @@ g = g +
   scale_color_manual(drop = FALSE, values = pal)
 g
 
-ui = fluidPage(titlePanel("Hey"),
+ui = fluidPage(titlePanel("Projection of HIV Incidence"),
                useShinyjs(),
                sidebarLayout(
                  sidebarPanel(
@@ -147,7 +147,7 @@ server = function(input, output, session) {
         shinyjs::onclick(
           "gauth_login-googleAuthUi",
           shinyjs::runjs(
-            "window.location.href = 'https://yourdomain.shinyapps.io/appName';"))
+            "window.location.href = 'https://jmuschelli.shinyapps.io/epi_click';"))
       }
     })
   }
@@ -163,7 +163,7 @@ server = function(input, output, session) {
     if (length(v$imgclick.x) <= 1) {
       disable("saveProjection")
     } else {
-      if (glogin || force){
+      if (rv$login || force){
         enable("saveProjection")
       }
     } 
@@ -193,7 +193,7 @@ server = function(input, output, session) {
     if (length(v$imgclick.x) <= 1) {
       disable("saveProjection")
     } else {
-      if (glogin || force){
+      if (rv$login || force){
         enable("saveProjection")
       }
     }

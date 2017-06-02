@@ -1,0 +1,11 @@
+name: epi_click
+title: epi_click
+account: jmuschelli
+server: shinyapps.io
+appId: 185772
+bundleId: 850695
+url: https://jmuschelli.shinyapps.io/epi_click/
+when: 1496416839.52034
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app_plotly.R|epi-click-auth.json|README.md
