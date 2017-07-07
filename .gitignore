@@ -4,3 +4,7 @@
 .Ruserdata
 epi-click-auth\.json
 epi-click-auth\.R
+yemen_dat\.csv
+yemen_dat\.*
+plot_data\.rds
+incidence_plots_over_time\.pdf

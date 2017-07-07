@@ -3,9 +3,9 @@ title: epi_click
 account: jmuschelli
 server: shinyapps.io
 appId: 185772
-bundleId: 850695
+bundleId: 884539
 url: https://jmuschelli.shinyapps.io/epi_click/
-when: 1496416839.52034
+when: 1498597236.98793
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: app_plotly.R|epi-click-auth.json|README.md
+ignoredFiles: app_obsolete.R|app_plotly.R|epi-click-auth.json|README.md|yemen_dat.csv|plot_data.rds
