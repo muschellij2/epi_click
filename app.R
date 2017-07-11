@@ -72,7 +72,7 @@ data = data %>% arrange(group, x, y)
 data = data %>% mutate(y = na.locf(y))
 
 # need to figure out multiple groups
-data = data %>% filter(group == 1)
+# data = data %>% filter(group == 1)
 
 draw_start = x_max + 1
 script <- c("Intro", paste0("outbreak_stats", 1:ngroups), "End")
@@ -95,18 +95,18 @@ ui = fluidPage(titlePanel("Projection of Disease Incidence"),
                    } else {
                      NULL
                    },
-                   downloadButton("saveProjection", "Save Projection")
+                   downloadButton("saveProjection", "Save Projection"),
+                   disabled(actionButton("btn", "Next"))
                  ),
                  mainPanel(
                    textOutput("display_username"),
                    div(id = "Intro",
                        includeMarkdown("intro.md")
                    ),
-                   hidden(plotOutput("plot_avg", click = "click_avg", dblclick = "dblclick_avg")),
-                   hidden(plotOutput("plot_iso1", click = "click_iso1", dblclick = "dblclick_iso1")),
-                   hidden(plotOutput("plot_iso2", click = "click_iso2", dblclick = "dblclick_iso2")),
-                   hidden(plotOutput("plot_iso3", click = "click_iso3", dblclick = "dblclick_iso3")),
-                   shinydrawrUI("outbreak_stats"),
+                   shinydrawrUI("outbreak_stats1"),
+                   shinydrawrUI("outbreak_stats2"),
+                   shinydrawrUI("outbreak_stats3"),
+                   # shinydrawrUI("outbreak_stats"),
                    hidden(div(id = "End",
                               includeMarkdown("end.md")
                    )),
@@ -159,65 +159,95 @@ server = function(input, output, session) {
     })
   }
   
+  
   observeEvent(input$btn, {
+    print(input$btn)
+    print(state)
+    print(script[state])
     if(state < length(script)){
       toggle(script[state])
       toggle(script[state + 1])
     }
+    # print("State Now")
     state <<- state + 1
+    curr_script = script[state]
+    if (grepl("outbreak", curr_script)) {
+      igroup = as.numeric(gsub("outbreak_stats", "", curr_script))
+      print(paste0("igroup is ", igroup))
+      dat = filter(data, group %in% igroup)
+      print(head(dat))
+      drawChart = callModule(shinydrawr,
+                 curr_script,
+                 dat,
+                 draw_start = draw_start,
+                 raw_draw = FALSE,
+                 draw_after = FALSE,
+                 x_key = "x",
+                 y_key = "y",
+                 y_min = y_min,
+                 y_max = y_max
+      ) 
+      print(drawChart)
+      drawChart()
+      # "#" + params.id + 
+    }
+    prev_script = script[state - 1]
+    if (grepl("outbreak", prev_script)) {
+      shinyjs::hide(id = paste0(prev_script, "-youDrawIt"))
+    }
+    
   })
   
   
-
-
+  
   #server side call of the drawr module
-  drawChart <- callModule(shinydrawr,
-                          "outbreak_stats",
-                          data,
-                          draw_start = draw_start,
-                          raw_draw = FALSE,
-                          draw_after = FALSE,
-                          x_key = "x",
-                          y_key = "y",
-                          y_min = y_min,
-                          y_max = y_max
-                          )
+  # drawChart <- callModule(shinydrawr,
+  #                         "outbreak_stats",
+  #                         data,
+  #                         draw_start = draw_start,
+  #                         raw_draw = FALSE,
+  #                         draw_after = FALSE,
+  #                         x_key = "x",
+  #                         y_key = "y",
+  #                         y_min = y_min,
+  #                         y_max = y_max
+  #                         )
   
   #logic for what happens after a user has drawn their values. Note this will fire on editing again too.
-  observeEvent(drawChart(), {
-    drawnValues = drawChart()
-    # drawnValues = drawnValues[-1]
-    print(length(drawnValues))
-    print(sum(data$x >= draw_start))
-    
-    drawn_data <- data %>%
-      filter(x >= draw_start) %>%
-      mutate(y = drawnValues)
-    
-    if (rv$login) {
-      drawn_data$username = userDetails()$displayName
-    } else {
-      drawn_data$username = NA
-    }
-    shinyjs::enable("saveProjection")
-    
-    output$saveProjection = downloadHandler(
-      filename = "projection.rda",
-      content = function(file) {
-        udets = NULL
-        if (rv$login) {
-          udets = userDetails()
-        }
-        timestamp = timestamp()
-        save(drawn_data, timestamp, udets, file = file)
-      }
-    )
-    
-    output$displayDrawn <- renderTable(drawn_data)
-  })
+  # observeEvent(drawChart(), {
+  #   drawnValues = drawChart()
+  #   # drawnValues = drawnValues[-1]
+  #   print(length(drawnValues))
+  #   print(sum(data$x >= draw_start))
+  #   
+  #   drawn_data <- data %>%
+  #     filter(x >= draw_start) %>%
+  #     mutate(y = drawnValues)
+  #   
+  #   if (rv$login) {
+  #     drawn_data$username = userDetails()$displayName
+  #   } else {
+  #     drawn_data$username = NA
+  #   }
+  #   shinyjs::enable("saveProjection")
+  #   
+  #   output$saveProjection = downloadHandler(
+  #     filename = "projection.rda",
+  #     content = function(file) {
+  #       udets = NULL
+  #       if (rv$login) {
+  #         udets = userDetails()
+  #       }
+  #       timestamp = timestamp()
+  #       save(drawn_data, timestamp, udets, file = file)
+  #     }
+  #   )
+  #   
+  #   output$displayDrawn <- renderTable(drawn_data)
+  # })
   
   
-
+  
   
 }
 
