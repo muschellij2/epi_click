@@ -7,4 +7,8 @@ epi-click-auth\.R
 yemen_dat\.csv
 yemen_dat\.*
 plot_data\.rds
+plot_data_date\.rds
+shiny_app_token\.rds
+^\.httr*
 incidence_plots_over_time\.pdf
+

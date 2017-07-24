@@ -13,6 +13,8 @@ library(markdown)
 library(lubridate)
 library(googlesheets)
 
+options(digits = 20)
+
 #########################################
 # Sheet setup
 #########################################
@@ -148,7 +150,7 @@ ui = fluidPage(titlePanel("Projection of Disease Incidence"),
                    # br(),
                    # disabled(actionButton("see_data", "See Drawn Data")),
                    br(),
-                   downloadButton("saveProjection", "Save Projection")
+                   disabled(actionButton("saveProjection", "Save Projection"))
                  ),
                  mainPanel(
                    textOutput("display_username"),
@@ -172,8 +174,7 @@ ui = fluidPage(titlePanel("Projection of Disease Incidence"),
 
 
 server = function(input, output, session) {
-  shinyjs::disable("saveProjection")
-  
+  session_id = basename(tempfile(pattern = "sess"))
   rv = reactiveValues(
     login = FALSE
   )  
@@ -220,7 +221,7 @@ server = function(input, output, session) {
       rv$login <- TRUE
       toggleState("next_btn")
       toggleState("back_btn")
-      toggleState("see_data")
+      # toggleState("see_data")
       # draw_charts()
       res = with_shiny(get_user_info, shiny_access_token = accessToken())
       email = res$emails$value[1]
@@ -265,16 +266,17 @@ server = function(input, output, session) {
       drawnValues = input[[name]]
       if (!is.null(drawnValues)) {
         igroup = as.numeric(gsub("outbreak_stats", "", iplot))
-
+        # need rounding for merge
+        drawnValues = round(drawnValues, digits = 8)
         drawn_data <- data %>%
           filter(x >= draw_start,
                  group %in% igroup) %>%
           mutate(y = drawnValues)
         
         if (rv$login) {
-          drawn_data$username = userDetails()$user
+          drawn_data$user = userDetails()$user
         } else {
-          drawn_data$username = NA
+          drawn_data$user = NA
         }
         all_data = rbind(all_data, drawn_data)
         print(drawn_data)
@@ -289,9 +291,9 @@ server = function(input, output, session) {
     output$displayDrawn <- renderTable(drawn_data)
   })  
   
-  observeEvent(input$see_data, {
-    reset_table()
-  })
+  # observeEvent(input$see_data, {
+  #   reset_table()
+  # })
   
   observeEvent(input$next_btn, {
     # print(input$btn)
@@ -375,44 +377,28 @@ server = function(input, output, session) {
       state <<- state - 1
     }
     run_tab()
-    
   })
   
   
+
   
-  #server side call of the drawr module
-  # drawChart <- callModule(shinydrawr,
-  #                         "outbreak_stats",
-  #                         data,
-  #                         draw_start = draw_start,
-  #                         raw_draw = FALSE,
-  #                         draw_after = FALSE,
-  #                         x_key = "x",
-  #                         y_key = "y",
-  #                         y_min = y_min,
-  #                         y_max = y_max
-  #                         )
-  
-  #logic for what happens after a user has drawn their values. Note this will fire on editing again too.
-  # observeEvent(dc[[]])
- 
-  
-  output$saveProjection = downloadHandler(
-    filename = "projection.rda",
-    content = function(file) {
-      df = make_data()
-      udets = NULL
-      if (glogin) {
-        udets = userDetails()  
+  observeEvent(input$saveProjection, {
+      drawn_data = run_tab()
+      drawn_data$date = today()
+      drawn_data$session_id = session_id
+      print(head(drawn_data))
+      drawn_data$group = as.character(drawn_data$group)
+      drawn_data = diff_data(drawn_data)
+      if ( nrow(drawn_data) > 0) {
+        result = drawn_gs %>% 
+          gs_add_row(input = drawn_data, verbose = TRUE)
+        print(result)
       }
-      timestamp = timestamp()
-      save(df, timestamp, udets, file = file)
-    }
+  }
   )
   
   
   
 }
 
-print(opts)
 shinyApp(ui = ui, server = server)
