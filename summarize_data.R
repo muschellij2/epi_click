@@ -38,8 +38,13 @@ stopifnot(all(week_df$vweek == 0))
 
 week_df = df %>% 
   group_by(adm1name, new_epiweek) %>% 
-  summarize(y = sum(incidence)) %>% 
+  summarize(y = sum(incidence),
+            date_value = first(date_value)) %>% 
   ungroup
+date_week_df = week_df  %>% 
+  mutate(group = adm1name,
+         x = date_value) %>% 
+  select(x, y, group)
 week_df = week_df %>% 
   mutate(group = adm1name,
          x = new_epiweek)
@@ -62,6 +67,8 @@ df = df %>%
   mutate(group = regroup(group))
 week_df = week_df %>% 
   mutate(group = regroup(group))
+date_week_df = date_week_df %>% 
+  mutate(group = regroup(group))
 
 g = df %>% ggplot(aes(x = x, 
                       y = y,
@@ -78,3 +85,4 @@ dev.off()
 
 # saveRDS(df, file = "plot_data.rds")
 saveRDS(week_df, file = "plot_data.rds")
+saveRDS(date_week_df, file = "plot_data_date.rds")
