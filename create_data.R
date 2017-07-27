@@ -1,7 +1,7 @@
 create_data = function(fname, ngroups = 5) {
   if (file.exists(fname)) {
     data = readRDS(fname)
-    data = data %>% filter(group %in% seq(ngroups))
+    # data = data %>% filter(group %in% seq(ngroups))
   } else {
     ntimes = 15
     n = ntimes * ngroups
@@ -11,7 +11,8 @@ create_data = function(fname, ngroups = 5) {
     data = data %>% mutate(
       # y = rpois(n, lambda = 99),
       y = rnorm(n, mean = 1.1029, sd = 0.5),
-      y = 10^(y) - 1
+      y = 10^(y) - 1,
+      group_name = group
     )
     data$y[ data$y < 0] = 0
   }

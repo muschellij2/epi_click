@@ -44,7 +44,7 @@ pal = c(pal, "black")
 ###########################################
 # Make a fake data.frame
 ###########################################
-ngroups = 5
+ngroups = 20
 fname = "plot_data.rds"
 # fname = "plot_data_date.rds"
 # fname = "blah.rds"
@@ -70,6 +70,24 @@ drawn = NULL
 dc = vector(mode = "list", length = ngroups)
 names(dc) = plot_names
 
+L = list(      
+  textOutput("display_username"),
+  div(id = "Intro",
+      includeMarkdown("intro.md")
+  ),
+  h1(id = "group_name", "")
+)
+for (i in seq_len(ngroups)) {
+  L = c(L, shinydrawrUI(paste0("outbreak_stats", i)))
+}
+L = c(L,
+      list(hidden(
+        div(id = "End",
+            includeMarkdown("end.md")
+        ))),
+      list(tableOutput("displayDrawn"))
+)
+
 ui = fluidPage(
   titlePanel("Projection of Disease Incidence"),
   useShinyjs(),
@@ -90,23 +108,7 @@ ui = fluidPage(
       # br(),
       # disabled(actionButton("saveProjection", "Save Projection"))
     ),
-    mainPanel(
-      textOutput("display_username"),
-      div(id = "Intro",
-          includeMarkdown("intro.md")
-      ),
-      shinydrawrUI("outbreak_stats1"),
-      shinydrawrUI("outbreak_stats2"),
-      shinydrawrUI("outbreak_stats3"),
-      shinydrawrUI("outbreak_stats4"),
-      shinydrawrUI("outbreak_stats5"),
-      # shinydrawrUI("outbreak_stats"),
-      hidden(div(id = "End",
-                 includeMarkdown("end.md")
-      )),
-      tableOutput("displayDrawn")
-      
-    )
+    do.call("mainPanel", args = L)
   )
 )
 
@@ -131,6 +133,8 @@ server = function(input, output, session) {
       toggleState("btn")
       
       shinyjs::html(id = "welcome", "", add = FALSE)
+      shinyjs::html(id = "group_name", html = "Click Contiue to Begin!")        
+      
       res = with_shiny(get_user_info, shiny_access_token = accessToken())
       email = res$emails$value[1]
       user = lookup_user(email)
@@ -157,7 +161,6 @@ server = function(input, output, session) {
       }
     })
   }
-  
   
   run_tab = reactive({
     all_data = NULL
@@ -191,6 +194,7 @@ server = function(input, output, session) {
     all_data
   })
   
+  
   reset_table = reactive({
     drawn_data = run_tab()
     output$displayDrawn <- renderTable(drawn_data)
@@ -208,8 +212,11 @@ server = function(input, output, session) {
       state <<- state + 1      
     }
     
-    
+    if (state > length(script)) {
+      state = length(script)
+    }
     curr_script = script[state]
+    
     # print(paste0("curr_script is ", curr_script))
     if (grepl("outbreak", curr_script) & !(curr_script %in% drawn)) {
       
@@ -239,7 +246,17 @@ server = function(input, output, session) {
     }
     
     if (grepl("outbreak", curr_script)) {
+      igroup = as.numeric(gsub("outbreak_stats", "", 
+                               curr_script))
+      gname <- data %>% 
+        filter(group %in% igroup) %>%
+        select(group_name)
+      gname = unique(gname$group_name)
+      gname = gname[ !is.na(gname)]
+      shinyjs::html(id = "group_name", 
+                    paste0("Area is: ", gname))       
       curr_script = paste0(curr_script, "-youDrawIt")
+      
       # reset_table()
     } else {
       output$displayDrawn = renderTable({
@@ -257,8 +274,11 @@ server = function(input, output, session) {
     shinyjs::hide(id = prev_script)
     
     if (grepl("End", curr_script)) {
+      shinyjs::show(id = "End")
+      shinyjs::html(id = "group_name", html = "")
+      shinyjs::disable(id = "btn")
       shinyjs::html(id = "btn", 
-                    html = "Save Data (Don't close until done)!", 
+                    html = "Saving Data (Don't close until done)!", 
                     add = FALSE)
       
       drawn_data = run_tab()
@@ -275,21 +295,27 @@ server = function(input, output, session) {
             # print(result)               
             nrows = nrow(drawn_data)
             withProgress(
-              message = 'Saving Data', value = 0, 
+              message = 'Saving Data', 
+              min = 0, 
+              max = 1,
+              value = 0, 
               {
                 for (i in seq_len(nrows)) {
                   result = drawn_gs %>% 
                     gs_add_row(input = drawn_data[i, ], 
                                verbose = TRUE)
+                  # Increment the progress bar, and update the detail text.
+                  setProgress(value = i/nrows)                  
                 }
-                # Increment the progress bar, and update the detail text.
-                incProgress(1/nrows)
+                
               })
+            print("Data Saved!")
           }
         }
       }
-      shinyjs::html(id = "btn", html = "Data Saved!", FALSE)
       shinyjs::disable(id = "btn")
+      
+      
     }
   })
   

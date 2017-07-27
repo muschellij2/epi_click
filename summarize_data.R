@@ -15,6 +15,7 @@ df = df %>%
          add_weeks = diff_year * 52,
          new_epiweek = add_weeks + epiweek) %>% 
   select(-year, -diff_year)
+df = df %>% rename(group_name = adm1name)
 
 df %>% 
   filter(date_value == ymd("2017-01-01") |
@@ -27,7 +28,7 @@ df %>%
 
 
 week_df = df %>% 
-  group_by(adm1name, date_value) %>% 
+  group_by(group_name, date_value) %>% 
   summarize(vweek = var(epiweek),
             epiweek = unique(epiweek),
             uweek = unique(lubridate::week(date_value)),
@@ -37,27 +38,27 @@ stopifnot(all(week_df$vweek == 0))
 
 
 week_df = df %>% 
-  group_by(adm1name, new_epiweek) %>% 
+  group_by(group_name, new_epiweek) %>% 
   summarize(y = sum(incidence),
             date_value = first(date_value)) %>% 
   ungroup
 date_week_df = week_df  %>% 
-  mutate(group = adm1name,
+  mutate(group = group_name,
          x = date_value) %>% 
   select(x, y, group)
 week_df = week_df %>% 
-  mutate(group = adm1name,
+  mutate(group = group_name,
          x = new_epiweek)
-week_df = week_df %>% select(x, y, group)
+week_df = week_df %>% select(x, y, group, group_name)
 
 df = df %>% 
-  group_by(adm1name, date_value) %>% 
+  group_by(group_name, date_value) %>% 
   summarize(y = sum(incidence)) %>% 
   ungroup
 df = df %>% 
-  mutate(group = adm1name,
+  mutate(group = group_name,
          x = date_value)
-df = df %>% select(x, y, group)
+df = df %>% select(x, y, group, group_name)
 
 regroup = function(x) {
   factor(as.numeric(factor(x)))
