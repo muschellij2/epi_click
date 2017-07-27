@@ -1,13 +1,30 @@
+rm(list = ls())
 library(shiny)
 library(shinyjs)
+library(shinysense)
+library(shinydashboard)
 library(dplyr)
-library(ggplot2)
-library(RColorBrewer)
 library(googleAuthR)
 library(googleID)
+library(lubridate)
+library(readr)
+library(zoo)
+library(markdown)
+library(lubridate)
+library(googlesheets)
 
+options(digits = 20)
+
+#########################################
+# Sheet setup
+#########################################
+source("sheet_setup.R")
+
+set.seed(20170707)
 opts = list()
 force = FALSE
+
+shinyOptions(debug = TRUE)
 
 glogin = FALSE
 if (file.exists("epi-click-auth.R")) {
@@ -21,7 +38,7 @@ if (file.exists("epi-click-auth.R")) {
   options("googleAuthR.webapp.client_secret" = gsecret_id)
   glogin = TRUE
 }
-
+drawn_data = NULL
 
 N = 200
 levs = c(2010:2017, "projection")
@@ -33,55 +50,92 @@ pal = c(pal, "black")
 ###########################################
 # Make a fake data.frame
 ###########################################
-data = data.frame(
-  x = runif(N, min = 0, max = 10),
-  y = runif(N, min = 0, max = 3),
-  year = factor(
-    sample(2010:2017, N, replace = TRUE),
-    levels = levs),
-  stringsAsFactors = FALSE
-)
-ux = sort(unique(data$x))
-
-mean_curve = loess(y ~ x, data = data)
-mean_curve = predict(mean_curve, newdata = ux)
-mean_curve = data.frame(x = ux, y = mean_curve)
-mean_curve$year = factor("projection", levels = levs)
-
-data = full_join(data, mean_curve)
-data = arrange(data, year, x, y)
-last_point = filter(data, year == "projection") %>% 
-  select(x, y) %>% slice(n())
-
-
-min_x_year = min(data$x)
-max_y = 10
-max_x_year = max(data$x)
-xmax = max_x_year + 10
-
-g = ggplot(data,
-           aes(x = x, y = y, colour = year)) +
-  theme_bw()
-g = g +
-  annotate(
-    "rect",
-    xmin = -Inf,
-    xmax = max_x_year,
-    ymin = -Inf,
-    ymax = Inf,
-    fill = "grey50",
-    alpha = 0.4,
-    colour = NA
+ngroups = 5
+# fname = "plot_data.rds"
+# fname = "plot_data_date.rds"
+fname = "blah.rds"
+if (file.exists(fname)) {
+  data = readRDS(fname)
+  data = data %>% filter(group %in% seq(ngroups))
+} else {
+  ntimes = 15
+  n = ntimes * ngroups
+  data <- data_frame(
+    x = rep(1:ntimes, ngroups),
+    group = factor(rep(1:ngroups, each = ntimes)))
+  data = data %>% mutate(
+    # y = rpois(n, lambda = 99),
+    y = rnorm(n, mean = 1.1029, sd = 0.5),
+    y = 10^(y) - 1
   )
-g = g + geom_line() +
-  xlim(c(min_x_year, xmax))
-g = g + ylim(c(0, max_y))
-g = g + 
-  # scale_colour_discrete(drop = FALSE) +
-  scale_color_manual(drop = FALSE, values = pal)
-g
+  data$y[ data$y < 0] = 0
+}
+ngroups = length(unique(data$group))
+y_max = max(data$y)
+x_min = min(data$x)
+y_min = 0
+x_max = max(data$x)
 
-ui = fluidPage(titlePanel("Projection of Cholera Incidence"),
+number_of_add_weeks = 12
+
+if (is.Date(x_max)) {
+  by = "week"
+} else {
+  by = 1
+}
+lower_limit = NA_real_
+eg = expand.grid(x = seq(x_max + 1, x_max + 1 + number_of_add_weeks, by = by),
+                 group = unique(data$group),
+                 y = lower_limit)
+data = full_join(data, eg)
+data = data %>% arrange(group, x, y)
+data = data %>% mutate(y = na.locf(y))
+# data$y[ is.na(data$y)] = ""
+
+# need to figure out multiple groups
+# data = data %>% filter(group == 1)
+
+draw_start = x_max + 1
+plot_names = paste0("outbreak_stats", 1:ngroups)
+script <- c("Intro", plot_names, "End")
+state <- 1
+drawn = NULL
+dc = vector(mode = "list", length = ngroups)
+names(dc) = plot_names
+
+# hidden(  shinydrawrUI("outbreak_stats"))
+# args = list(
+#   textOutput("display_username"),
+#   shinydrawrUI("outbreak_stats")
+# )
+# tableOutput("displayDrawn")
+
+
+# ui = dashboardPage(
+#   dashboardHeader(title = "Projection of Disease Incidence"),
+#   useShinyjs(),
+#   dashboardSidebar(
+#     sidebarMenu(id = "tabs",
+#                 menuItem("Login", tabName = "dashboard", icon = icon("smile-o")),
+#                 menuItemOutput("logged_in")
+#     )
+#   ),
+#   dashboardBody(
+#     tabItems(
+#       tabItem(tabName = "dashboard",
+#               box(
+#                 loginOutput("loginButton"),
+#                 uiOutput("logininfo")
+#               )
+#       ),
+#       tabItem(tabName = "logged_in_page",
+#               box(title = "Logged in")
+#       )
+#     )
+#   )
+# )
+
+ui = fluidPage(titlePanel("Projection of Disease Incidence"),
                useShinyjs(),
                sidebarLayout(
                  sidebarPanel(
@@ -91,33 +145,69 @@ ui = fluidPage(titlePanel("Projection of Cholera Incidence"),
                    } else {
                      NULL
                    },
-                   downloadButton("saveProjection", "Save Projection")
+                   disabled(actionButton("back_btn", "Back")),
+                   disabled(actionButton("next_btn", "Next")),
+                   # br(),
+                   # disabled(actionButton("see_data", "See Drawn Data")),
+                   br(),
+                   disabled(actionButton("saveProjection", "Save Projection"))
                  ),
                  mainPanel(
                    textOutput("display_username"),
-                   plotOutput(
-                     "plot1",
-                     click = "plot1_click",
-                     dblclick = "plot1_dblclick")
+                   div(id = "Intro",
+                       includeMarkdown("intro.md")
+                   ),
+                   shinydrawrUI("outbreak_stats1"),
+                   shinydrawrUI("outbreak_stats2"),
+                   shinydrawrUI("outbreak_stats3"),
+                   shinydrawrUI("outbreak_stats4"),
+                   shinydrawrUI("outbreak_stats5"),
+                   # shinydrawrUI("outbreak_stats"),
+                   hidden(div(id = "End",
+                              includeMarkdown("end.md")
+                   )),
+                   tableOutput("displayDrawn")
+                   
                  )
                )
 )
 
 
 server = function(input, output, session) {
-  shinyjs::disable("saveProjection")
-  
-  v <- reactiveValues(
-    imgclick.x = last_point$x,
-    imgclick.y = last_point$y,
-    # imgclick.x = NULL,
-    # imgclick.y = NULL,    
-    dbl.x = NULL,
-    dbl.y = NULL
-  )
+  session_id = basename(tempfile(pattern = "sess"))
   rv = reactiveValues(
     login = FALSE
   )  
+  
+  
+  # draw_charts = reactive({
+  #   run_scripts = script[grepl("outbreak", script)]
+  #   for (curr_script in run_scripts) {
+  #     igroup = as.numeric(gsub("outbreak_stats", "", curr_script))
+  #     print(paste0("igroup is ", igroup))
+  #     dat = filter(data, group %in% igroup)
+  #     # print(head(dat))
+  #     drawChart = callModule(
+  #       shinydrawr,
+  #       curr_script,
+  #       dat,
+  #       draw_start = draw_start,
+  #       raw_draw = FALSE,
+  #       draw_after = FALSE,
+  #       x_key = "x",
+  #       y_key = "y",
+  #       y_min = y_min,
+  #       y_max = y_max
+  #     ) 
+  #     # print(drawChart)
+  #     drawChart()
+  #     curr_script = paste0(curr_script, "-youDrawIt")
+  #     shinyjs::hide(id = curr_script)
+  #     # "#" + params.id + 
+  #   }
+  #   
+  # })  
+  
   if (glogin) {
     ## Authentication
     accessToken <- callModule(googleAuth, "gauth_login",
@@ -129,7 +219,15 @@ server = function(input, output, session) {
              "You are not logged in.  You must log in to save projections")
       )
       rv$login <- TRUE
-      with_shiny(get_user_info, shiny_access_token = accessToken())
+      toggleState("next_btn")
+      toggleState("back_btn")
+      # toggleState("see_data")
+      # draw_charts()
+      res = with_shiny(get_user_info, shiny_access_token = accessToken())
+      email = res$emails$value[1]
+      user = lookup_user(email)
+      res$user = user
+      res
     })
     
     ## Display user's Google display name after successful login
@@ -137,7 +235,10 @@ server = function(input, output, session) {
       validate(
         need(userDetails(), "getting user details")
       )
-      paste0("You are logged in as ", userDetails()$displayName)
+
+      # print(email)
+      # paste0("You are logged in as ", userDetails()$displayName)
+      paste0("You are logged in as ", userDetails()$user)
       # userDetails()$displayName
     })
     
@@ -152,95 +253,152 @@ server = function(input, output, session) {
     })
   }
   
-  ### Keep track of click locations if tracing paw or tumor
-  observeEvent(input$plot1_click, {
-    # Keep track of number of clicks for line drawing
-    if (input$plot1_click$x > max_x_year & 
-        input$plot1_click$x <= xmax) {
-      v$imgclick.x <- c(v$imgclick.x, input$plot1_click$x)
-      v$imgclick.y <- c(v$imgclick.y, input$plot1_click$y)
-    }
-    if (length(v$imgclick.x) <= 1) {
-      disable("saveProjection")
-    } else {
-      if (rv$login || force){
-        enable("saveProjection")
+  
+  run_tab = reactive({
+    all_data = NULL
+    for (iplot in plot_names) {
+      drawChart = dc[[iplot]]$chart
+      if (!is.null(drawChart)) {
+        # print(drawChart())
       }
-    } 
+      name = paste0(iplot, "-doneDragging")
+      # print("grabbing the name!")
+      drawnValues = input[[name]]
+      if (!is.null(drawnValues)) {
+        igroup = as.numeric(gsub("outbreak_stats", "", iplot))
+        # need rounding for merge
+        drawnValues = round(drawnValues, digits = 8)
+        drawn_data <- data %>%
+          filter(x >= draw_start,
+                 group %in% igroup) %>%
+          mutate(y = drawnValues)
+        
+        if (rv$login) {
+          drawn_data$user = userDetails()$user
+        } else {
+          drawn_data$user = NA
+        }
+        all_data = rbind(all_data, drawn_data)
+        # print(drawn_data)
+        shinyjs::enable("saveProjection")
+      }
+    }
+    all_data
   })
+
+  reset_table = reactive({
+    drawn_data = run_tab()
+    output$displayDrawn <- renderTable(drawn_data)
+  })  
   
+  # observeEvent(input$see_data, {
+  #   reset_table()
+  # })
   
-  make_data = reactive({
-    df = data.frame(
-      x = v$imgclick.x,
-      y = v$imgclick.y,
-      stringsAsFactors = FALSE
-    )
-    df
-  })
-  
-  observeEvent(input$plot1_dblclick, {
-    print(input$plot1_dblclick)
-    rm.x = input$plot1_dblclick$x
-    if (rm.x > max_x_year) {
+  observeEvent(input$next_btn, {
+    # print(input$btn)
+    # print(state)
+    # print(script[state])
+    if(state < length(script)){
+      # toggle(script[state])
+      # toggle(script[state + 1])
+      # print("State Now")
+      state <<- state + 1      
+    }
+    
+    
+    curr_script = script[state]
+    # print(paste0("curr_script is ", curr_script))
+    if (grepl("outbreak", curr_script) & !(curr_script %in% drawn)) {
       
-      rm.y = input$plot1_dblclick$y
-      dist = (v$imgclick.x - rm.x) ^ 2 + (v$imgclick.y - rm.y) ^ 2
-      rm_point = which.min(dist)
-      v$imgclick.x = v$imgclick.x[-rm_point]
-      v$imgclick.y = v$imgclick.y[-rm_point]
+      igroup = as.numeric(gsub("outbreak_stats", "", curr_script))
+      # print(paste0("igroup is ", igroup))
+      dat = filter(data, group %in% igroup)
+      # print(head(dat))
+      drawChart = callModule(
+        shinydrawr,
+        curr_script,
+        dat,
+        draw_start = draw_start,
+        raw_draw = FALSE,
+        draw_after = FALSE,
+        x_key = "x",
+        y_key = "y",
+        y_min = y_min,
+        y_max = y_max
+      ) 
+      dc[[curr_script]] <<- list(
+        chart = drawChart,
+        data = dat
+      )
+      drawChart()
+      drawn <<- c(drawn, curr_script)
+      
     }
-    if (length(v$imgclick.x) <= 1) {
-      disable("saveProjection")
+    
+    if (grepl("outbreak", curr_script)) {
+      curr_script = paste0(curr_script, "-youDrawIt")
+      reset_table()
     } else {
-      if (rv$login || force){
-        enable("saveProjection")
-      }
+      output$displayDrawn = renderTable("")
     }
+    shinyjs::show(id = curr_script)
+    
+    prev_script = script[state - 1]
+    if (grepl("outbreak", prev_script)) {
+      prev_script = paste0(prev_script, "-youDrawIt")
+    }
+    shinyjs::hide(id = prev_script)
+    
+    run_tab()
   })
   
-  ### Original Image
-  output$plot1 <- renderPlot({
-    df = make_data()
-    # print(df)
-    if (nrow(df) > 0) {
-      df$year = factor("projection", levels = levs)
-      df = arrange(df, year, x, y)
-      print("in there")
-      print("df is")
-      print(df)
-      gg = g +
-        geom_point(data = df,
-                   aes(
-                     x = x,
-                     y = y
-                   ), colour = "black") +
-        geom_line(data = df,
-                  aes(
-                    x = x,
-                    y = y,
-                    colour = year
-                  ), colour = "black")
-    } else {
-      gg = g
+  observeEvent(input$back_btn, {
+    # print(state)
+    print(script[state])
+    if (state > 1) {
+      # toggle(script[state])
+      # toggle(script[state - 1])
+      curr_script = script[state]
+      if (grepl("outbreak", curr_script)) {
+        curr_script = paste0(curr_script, "-youDrawIt")
+      } 
+      shinyjs::hide(id = curr_script)
+      
+      prev_script = script[state - 1]
+      if (grepl("outbreak", prev_script)) {
+        prev_script = paste0(prev_script, "-youDrawIt")
+        reset_table()
+      } else {
+        output$displayDrawn = renderTable("")
+      }
+      shinyjs::show(id = prev_script)
+      
+      state <<- state - 1
     }
-    gg
+    run_tab()
   })
   
-  output$saveProjection = downloadHandler(
-    filename = "projection.rda",
-    content = function(file) {
-      df = make_data()
-      udets = NULL
-      if (glogin) {
-        udets = userDetails()  
+  
+
+  
+  observeEvent(input$saveProjection, {
+      drawn_data = run_tab()
+      drawn_data$date = today()
+      drawn_data$session_id = session_id
+      print(head(drawn_data))
+      drawn_data$group = as.character(drawn_data$group)
+      drawn_data = diff_data(drawn_data)
+      if ( nrow(drawn_data) > 0) {
+        result = drawn_gs %>% 
+          gs_add_row(input = drawn_data, verbose = TRUE)
+        print(result)
       }
-      timestamp = timestamp()
-      save(df, timestamp, udets, file = file)
-    }
+  }
   )
+  
+  
   
 }
 
-print(opts)
-shinyApp(ui = ui, server = server, options = opts)
+shinyApp(ui = ui, server = server)

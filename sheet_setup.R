@@ -55,10 +55,17 @@ gs_drawn_data = read_gs_drawn()
 gs_user_data = read_gs_user()
 
 lookup_user = function(email) {
-  if (email %in% gs_user_data$email) {
+  have_email = email %in% gs_user_data$email
+  msg = paste0("Email is ", email)
+  shinyjs::logjs(msg)
+  
+  if (have_email) {
+    shinyjs::logjs("Email is in the data set")
+    print(head(gs_user_data))
     username = gs_user_data[ gs_user_data$email %in% email, ]
-    username = username$user
+    username = username$user[1]
   } else {
+    shinyjs::logjs("Email NOT in data set")
     # make it unique
     username = NA
     while (username %in% unique(gs_user_data$user)) {
