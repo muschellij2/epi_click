@@ -12,7 +12,7 @@ create_data = function(fname, ngroups = 5) {
       # y = rpois(n, lambda = 99),
       y = rnorm(n, mean = 1.1029, sd = 0.5),
       y = 10^(y) - 1,
-      group_name = group
+      group_name = as.character(group)
     )
     data$y[ data$y < 0] = 0
   }
@@ -30,9 +30,13 @@ create_data = function(fname, ngroups = 5) {
     by = 1
   }
   lower_limit = NA_real_
-  eg = expand.grid(x = seq(x_max + 1, x_max + 1 + number_of_add_weeks, by = by),
-                   group = unique(data$group),
-                   y = lower_limit)
+  eg = expand.grid(
+    x = seq(x_max + 1, 
+            x_max + 1 + number_of_add_weeks, by = by),
+    group = unique(data$group),
+    y = lower_limit)
+  gg = unique(data[, c("group", "group_name")])
+  eg = left_join(eg, gg, by = "group")
   data = full_join(data, eg)
   data = data %>% arrange(group, x, y)
   data = data %>% mutate(y = na.locf(y))

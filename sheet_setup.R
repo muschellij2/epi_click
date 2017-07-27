@@ -21,6 +21,7 @@ read_gs_coltypes = function(ss = drawn_gs,
                            x = col_integer(),
                            y = col_double(),
                            group = col_character(),
+                           group_name = col_character(),
                            user = col_character(),
                            date = col_date(format = ""),
                            session_id = col_character(),
@@ -82,13 +83,14 @@ diff_data = function(drawn_data) {
   if (nrow(drawn_data) > 0) {
     gs_drawn_data = read_gs_drawn()
     drawn_data$group = as.character(drawn_data$group)
+    drawn_data$group_name = as.character(drawn_data$group_name)
     dd = arrange(drawn_data, user, date, session_id, 
-                 x, y, group)
+                 x, y, group, group_name)
     print(head(dd))
     print(dput(head(dd)))
     
     dd = arrange(gs_drawn_data, user, date, session_id, 
-                 x, y, group)
+                 x, y, group, group_name)
     print(head(gs_drawn_data))    
     drawn_data = anti_join(drawn_data, gs_drawn_data)
     print(drawn_data)
