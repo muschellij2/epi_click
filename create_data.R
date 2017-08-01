@@ -39,7 +39,7 @@ create_data = function(fname, ngroups = 5) {
   eg = left_join(eg, gg, by = "group")
   data = full_join(data, eg)
   data = data %>% arrange(group, x, y)
-  data = data %>% mutate(y = na.locf(y))
+  # data = data %>% mutate(y = na.locf(y))
   L = list(
     ngroups = ngroups,
     y_max = y_max,

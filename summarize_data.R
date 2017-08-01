@@ -44,8 +44,9 @@ week_df = df %>%
   ungroup
 date_week_df = week_df  %>% 
   mutate(group = group_name,
-         x = date_value) %>% 
-  select(x, y, group)
+         x = date_value) 
+date_week_df = date_week_df %>% select(x, y, group, group_name)
+
 week_df = week_df %>% 
   mutate(group = group_name,
          x = new_epiweek)
@@ -68,7 +69,7 @@ df = df %>%
   mutate(group = regroup(group))
 week_df = week_df %>% 
   mutate(group = regroup(group))
-date_week_df = date_week_df %>% 
+date_week_df = date_week_df %>%
   mutate(group = regroup(group))
 
 g = df %>% ggplot(aes(x = x, 
