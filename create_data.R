@@ -1,4 +1,4 @@
-create_data = function(fname, ngroups = 5) {
+create_data = function(fname, ngroups = 5, number_of_add_weeks = 12) {
   if (file.exists(fname)) {
     data = readRDS(fname)
     # data = data %>% filter(group %in% seq(ngroups))
@@ -22,10 +22,11 @@ create_data = function(fname, ngroups = 5) {
   y_min = 0
   x_max = max(data$x)
   
-  number_of_add_weeks = 12
+  # number_of_add_weeks = 12
   
   if (is.Date(x_max)) {
     by = "week"
+    number_of_add_weeks = as.period(number_of_add_weeks, unit = "week")
   } else {
     by = 1
   }
@@ -39,7 +40,7 @@ create_data = function(fname, ngroups = 5) {
   eg = left_join(eg, gg, by = "group")
   data = full_join(data, eg)
   data = data %>% arrange(group, x, y)
-  data = data %>% mutate(y = na.locf(y))
+  # data = data %>% mutate(y = na.locf(y))
   L = list(
     ngroups = ngroups,
     y_max = y_max,

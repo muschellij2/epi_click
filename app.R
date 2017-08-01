@@ -24,43 +24,24 @@ source("create_data.R")
 
 # if (file.exists("epi-click-auth.R")) {
 
-# source("epi-click-auth.R")
-options(googleAuthR.scopes.selected = 
-          c("https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile"))
-options("googleAuthR.webapp.client_id" = gclient_id)
-options("googleAuthR.webapp.client_secret" = gsecret_id)
-glogin = TRUE
-# }
 drawn_data = NULL
-
-N = 200
-levs = c(2010:2017, "projection")
-
-pal = RColorBrewer::brewer.pal(
-  n = length(levs) - 1, "RdYlBu")
-pal = c(pal, "black")
 
 ###########################################
 # Make a fake data.frame
 ###########################################
 ngroups = 20
-fname = "plot_data.rds"
-# fname = "plot_data_date.rds"
+# fname = "plot_data.rds"
+fname = "plot_data_date.rds"
 # fname = "blah.rds"
 
-L = create_data(fname, ngroups = ngroups)
+L = create_data(fname, ngroups = ngroups,
+                number_of_add_weeks = 12)
 ngroups = L$ngroups
 y_max = L$y_max
 x_min = L$x_min
 y_min = L$y_min
 x_max = L$x_max
 data = L$data
-
-# data$y[ is.na(data$y)] = ""
-
-# need to figure out multiple groups
-# data = data %>% filter(group == 1)
 
 draw_start = x_max + 1
 plot_names = paste0("outbreak_stats", 1:ngroups)
@@ -69,6 +50,11 @@ state <- 1
 drawn = NULL
 dc = vector(mode = "list", length = ngroups)
 names(dc) = plot_names
+
+
+###################################################
+# All UI
+###################################################
 
 L = list(      
   textOutput("display_username"),
@@ -94,84 +80,87 @@ ui = fluidPage(
   sidebarLayout(
     sidebarPanel(
       p(id = "welcome", "Welcome!"),
-      if (glogin) {
-        googleAuthUI("gauth_login")
-      } else {
-        NULL
-      },
-      # disabled(actionButton("back_btn", "Back")),
-      # disabled(actionButton("next_btn", "Next")),
-      # disabled(actionButton("back_btn", "Back")),
+      googleAuthUI("gauth_login"),
       disabled(actionButton("btn", "Continue"))
-      # br(),
-      # disabled(actionButton("see_data", "See Drawn Data")),
-      # br(),
-      # disabled(actionButton("saveProjection", "Save Projection"))
     ),
     do.call("mainPanel", args = L)
   )
 )
 
-
+###################################################
+# All Server
+###################################################
 server = function(input, output, session) {
   session_id = basename(tempfile(pattern = "sess"))
   rv = reactiveValues(
     login = FALSE
   )  
   
-  if (glogin) {
-    ## Authentication
-    accessToken <- callModule(googleAuth, "gauth_login",
-                              login_class = "btn btn-primary",
-                              logout_class = "btn btn-primary")
-    userDetails <- reactive({
-      validate(
-        need(accessToken(), 
-             "You are not logged in.  You must log in to save projections")
-      )
-      rv$login <- TRUE
-      toggleState("btn")
-      
-      shinyjs::html(id = "welcome", "", add = FALSE)
-      shinyjs::html(id = "group_name", html = "Click Contiue to Begin!")        
-      
-      res = with_shiny(get_user_info, shiny_access_token = accessToken())
-      email = res$emails$value[1]
-      user = lookup_user(email)
-      res$user = user
-      res
-    })
-    
-    ## Display user's Google display name after successful login
-    output$display_username <- renderText({
-      validate(
-        need(userDetails(), "getting user details")
-      )
-      paste0("You are logged in as ", userDetails()$user,
-             ", this is randomly generated.")
-    })
-    
-    ## Workaround to avoid shinyaps.io URL problems
-    observe({
-      if (rv$login) {
-        shinyjs::onclick(
-          "gauth_login-googleAuthUi",
-          shinyjs::runjs(
-            "window.location.href = 'https://jmuschelli.shinyapps.io/epi_click';"))
-      }
-    })
-  }
   
+  ###################################################
+  # Validating Google Auths
+  ###################################################
+  ## Authentication
+  accessToken <- callModule(
+    googleAuth, "gauth_login",
+    login_class = "btn btn-primary",
+    logout_class = "btn btn-primary")
+  userDetails <- reactive({
+    validate(
+      need(accessToken(), 
+           "You are not logged in.  You must log in to save projections")
+    )
+    rv$login <- TRUE
+    toggleState("btn")
+    
+    shinyjs::html(id = "welcome", "", add = FALSE)
+    shinyjs::html(id = "group_name", html = "Click Contiue to Begin!")        
+    
+    res = with_shiny(get_user_info, shiny_access_token = accessToken())
+    email = res$emails$value[1]
+    user = lookup_user(email)
+    res$user = user
+    res
+  })
+  
+  ## Display user's Google display name after successful login
+  output$display_username <- renderText({
+    validate(
+      need(userDetails(), "getting user details")
+    )
+    paste0("You are logged in as ", userDetails()$user,
+           ", this is randomly generated.")
+  })
+  
+  ## Workaround to avoid shinyaps.io URL problems
+  observe({
+    if (rv$login) {
+      shinyjs::onclick(
+        "gauth_login-googleAuthUi",
+        shinyjs::runjs(
+          "window.location.href = 'https://jmuschelli.shinyapps.io/epi_click';"))
+    }
+  })
+  
+  ###################################################
+  # End Validating Google Auths
+  ###################################################
   run_tab = reactive({
     all_data = NULL
     for (iplot in plot_names) {
       drawChart = dc[[iplot]]$chart
-      if (!is.null(drawChart)) {
-        # print(drawChart())
-      }
       name = paste0(iplot, "-doneDragging")
       # print("grabbing the name!")
       drawnValues = input[[name]]
+      print("drawn values are")
+      print(drawnValues)
+      
+      name2 = paste0(iplot, "-myDrawr_drawnData")
+      # print("grabbing the name!")
+      drawnValues = input[[name]]
+      print("drawn values are")
+      print(drawnValues)
+      
       if (!is.null(drawnValues)) {
         igroup = as.numeric(gsub("outbreak_stats", "", iplot))
         # need rounding for merge
@@ -226,20 +215,25 @@ server = function(input, output, session) {
       # print(head(dat))
       drawChart = callModule(
         shinydrawr,
-        curr_script,
-        dat,
+        id = curr_script,
+        data = dat,
         draw_start = draw_start,
         raw_draw = FALSE,
-        draw_after = FALSE,
         x_key = "x",
         y_key = "y",
         y_min = y_min,
         y_max = y_max
       ) 
+      print("I tried to draw ")
+      print(drawChart)
+      print(head(dat))
       dc[[curr_script]] <<- list(
         chart = drawChart,
         data = dat
       )
+      print("Names of input")
+      print(names(input))     
+      print(drawChart())
       drawChart()
       drawn <<- c(drawn, curr_script)
       
